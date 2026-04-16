@@ -74,16 +74,39 @@ resource "azurerm_container_app_environment" "main" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
 }
 
+resource "azurerm_user_assigned_identity" "containers" {
+  name                = "id-ca-infrademo"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+}
+
+
+resource "azurerm_role_assignment" "container_app_acrpull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.containers.principal_id
+}
+
 resource "azurerm_container_app" "main" {
   name                         = "ca-infrademo"
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
 
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.containers.id]
+  }
+
+  registry {
+    server   = azurerm_container_registry.main.login_server
+    identity = azurerm_user_assigned_identity.containers.id
+  }
+
   template {
     container {
-      name   = "hello"
-      image  = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+      name   = "cscd396-app1"
+      image  = "${azurerm_container_registry.main.login_server}/app1:latest"
       cpu    = 0.5
       memory = "1Gi"
     }
@@ -99,6 +122,7 @@ resource "azurerm_container_app" "main" {
     }
   }
 }
+
 
 output "container_app_url" {
   description = "The URL of the deployed Azure Container App."
